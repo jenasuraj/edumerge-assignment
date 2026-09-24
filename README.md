@@ -1,136 +1,53 @@
-# Assignment 5 – Admission Lead Management.
+# EduMerge - Admission Lead Management System
 
+EduMerge is made for a simple admission office flow. Suppose one student is interested in a course and contacts the institute from website, WhatsApp, phone call, walk-in, fair or campaign. That person becomes a lead in this system. After that admin or counsellor can follow up, update the lead status, check assessment and finally convert that lead into admission.
 
-The focus is mainly on below things : 
+This project is not a full college ERP. I have only kept the admission lead part here. So there is no attendance, marks, timetable, payroll etc.
 
-- admission enquiries
-- lead assignment
-- counsellor follow-up
-- assessment
-- admissions
+## Basic Story Of The App
 
-## Tech Stack
+First, a student opens the public website. On home page there are two options. One is for admission enquiry and one is for login.
 
-- Next.js App Router
-- TypeScript
-- Tailwind CSS
-- shadcn/ui
-- PostgreSQL / Neon DB
-- `pg` driver
-- JWT auth
-- HTTP-only cookie session
-- bcrypt password hashing with 12 rounds
+If student clicks enquiry, he goes to `/contact`. There he fills name, phone, email, course interest, source and query. This form does not ask internal fields like assigned counsellor, status, priority or assessment. Those are handled inside the system only.
 
-## High Level Architecture
-
-The project is built as one Next.js application. Frontend and backend both live in the same repo.
+When the form is submitted, frontend calls:
 
 ```text
-Browser
-  |
-  | renders pages and submits forms
-  v
-Next.js App Routes
-  |
-  | thin page files import feature components
-  v
-Feature Components
-  |
-  | fetch / mutate data through API routes
-  v
-Next.js Route Handlers
-  |
-  | validate request, verify JWT, check role
-  v
-PostgreSQL / Neon DB
+POST /api/leads
 ```
 
-## Frontend Architecture
-
-All page routes are inside `app/`, but the real UI logic is kept inside `features/`.
-
-Example:
+Backend creates a lead like this:
 
 ```text
-app/dashboard/page.tsx
-  -> features/dashboard/DashboardPage.tsx
+source = WEBSITE
+status = NEW
+priority = NORMAL
+reachout = false
+assessment = null
+assigned_to = null
 ```
 
-This keeps route files small and makes the feature code easier to maintain.
+So public user can only create enquiry. They cannot assign lead or change status.
 
-Main frontend areas:
+## Login Flow
+
+Admin and counsellor both use same login page:
 
 ```text
-features/home
-features/contact
-features/auth
-features/dashboard
-features/leads
-features/admissions
-features/counsellors
+/login
 ```
 
-Shared UI and small reusable components live in:
+The user only enters email and password. There is no role dropdown, because role should not come from frontend.
 
-```text
-components/
-components/ui/
-```
-
-`components/ui/` contains shadcn components like Button, Dialog, Table, Tabs, Select etc.
-
-## Pages
-
-### Public Pages
-
-- `/` - landing page
-- `/contact` - public admission enquiry form
-- `/login` - common login for admin and counsellor
-
-### Protected Page
-
-- `/dashboard` - common dashboard for both roles
-
-The dashboard UI changes based on the logged-in user role.
-
-## Backend Architecture
-
-Backend APIs are implemented using Next.js Route Handlers under `app/api`.
-
-```text
-app/api/auth/login
-app/api/auth/me
-app/api/auth/logout
-
-app/api/leads
-
-app/api/admin/leads
-app/api/admin/leads/action
-app/api/admin/leads/reassign
-app/api/admin/admissions
-app/api/admin/counsellors
-
-app/api/counsellor/leads
-app/api/counsellor/leads/action
-app/api/counsellor/admissions
-```
-
-The backend is responsible for authorization. The frontend may hide buttons, but the API still checks the user role and ownership of data.
-
-## Authentication Flow
-
-Login is shared for both admin and counsellor.
+When login happens:
 
 ```text
 POST /api/auth/login
-  -> find user by email
-  -> compare bcrypt password hash
-  -> create JWT
-  -> store JWT in HTTP-only cookie
-  -> return logged-in user
 ```
 
-JWT payload:
+Backend finds the user by email, compares password using bcrypt, then creates JWT. Password is stored as bcrypt hash with 12 rounds.
+
+JWT contains:
 
 ```ts
 {
@@ -140,182 +57,295 @@ JWT payload:
 }
 ```
 
-Route protection is handled in `proxy.ts`.
+This JWT is stored in HTTP-only cookie. So frontend cannot directly read the token, but browser sends it automatically to backend APIs.
 
-- If `/dashboard` is opened without cookie, user is redirected to `/login`
-- If `/login` is opened with valid cookie, user is redirected to `/dashboard`
+## How Dashboard Knows Admin Or Counsellor
 
-## Role Access
-
-### Admin
-
-Admin can:
-
-- view all leads
-- add leads
-- add counsellors
-- assign or reassign leads
-- update status, priority, reachout and assessment
-- admit candidates
-- view all admissions
-
-### Counsellor
-
-Counsellor can:
-
-- view only assigned leads
-- add lead, which is automatically assigned to that counsellor
-- update own leads
-- admit own passed leads
-- view related admissions
-
-Counsellor cannot:
-
-- see other counsellor leads
-- reassign leads
-- create counsellor accounts
-
-## Database Architecture
-
-Database schema is kept in:
+After login, both admin and counsellor go to same route:
 
 ```text
-db/schema.sql
+/dashboard
 ```
 
-Main tables:
-
-### `users`
-
-Stores both admin and counsellor accounts.
-
-Important columns:
-
-- `id`
-- `name`
-- `email`
-- `password`
-- `role`
-- `phone`
-- `is_active`
-- `created_at`
-
-The `password` column stores bcrypt hashed password, not plain text.
-
-### `leads`
-
-Stores admission leads.
-
-Important columns:
-
-- `id`
-- `name`
-- `phone`
-- `email`
-- `course_interest`
-- `query`
-- `source`
-- `status`
-- `priority`
-- `reachout`
-- `assessment`
-- `assigned_to`
-- `created_by`
-- `created_at`
-- `updated_at`
-
-### `admissions`
-
-Stores final admission records.
-
-Important columns:
-
-- `id`
-- `lead_id`
-- `course`
-- `admitted_by`
-- `admission_date`
-
-## Data Flow Example
-
-### Public Enquiry
+When dashboard opens, frontend calls:
 
 ```text
-/contact form
-  -> POST /api/leads
-  -> creates lead with source WEBSITE
-  -> assigned_to is null
-  -> status is NEW
+GET /api/auth/me
 ```
 
-### Admin Lead Management
+This API reads JWT from cookie and returns the logged in user.
+
+Example admin response:
+
+```json
+{
+  "id": 1,
+  "name": "Admin",
+  "email": "admin@gmail.com",
+  "role": "ADMIN"
+}
+```
+
+Example counsellor response:
+
+```json
+{
+  "id": 2,
+  "name": "Rahul",
+  "email": "rahul@college.com",
+  "role": "COUNSELLOR"
+}
+```
+
+Based on this `role`, frontend decides what to show.
+
+If role is admin, frontend shows:
+
+- Add Counsellor button
+- Add Lead button
+- counsellor assignment dropdown
+- all leads
+- all admissions
+
+If role is counsellor, frontend shows:
+
+- Add Lead button
+- only assigned leads
+- own admissions
+- no counsellor creation
+- no lead reassignment
+
+But this is only for UI. Real safety is still on backend.
+
+## Admin Scenario
+
+Suppose admin logs in.
+
+Dashboard calls:
 
 ```text
-Admin dashboard
-  -> GET /api/admin/leads
-  -> admin receives all leads
-  -> admin can update lead or assign counsellor
+GET /api/admin/leads
+GET /api/admin/admissions
+GET /api/admin/counsellors
 ```
 
-### Counsellor Lead Management
+Admin can see every lead in the system. If a website lead came unassigned, admin can open Manage Lead modal and assign it to one counsellor.
+
+Admin can update:
+
+- reachout
+- assessment
+- priority
+- status
+- assigned counsellor
+
+If assessment is `PASS`, Admit Candidate button becomes useful. If assessment is `FAILED`, frontend disables admission button. Backend also checks this condition again.
+
+When admin admits a lead:
 
 ```text
-Counsellor dashboard
-  -> GET /api/counsellor/leads
-  -> API filters by assigned_to = logged in counsellor id
+POST /api/admin/admissions
 ```
 
-### Admission
+Backend creates one admission record and updates lead status to:
 
 ```text
-Lead assessment must be PASS
-  -> POST /api/admin/admissions or /api/counsellor/admissions
-  -> create admission record
-  -> update lead status to ADMITTED
+ADMITTED
 ```
 
-## Important Lib Files
+## Counsellor Scenario
+
+Suppose counsellor Rahul logs in.
+
+Dashboard calls:
+
+```text
+GET /api/counsellor/leads
+GET /api/counsellor/admissions
+```
+
+Backend does not return all leads. It returns only:
+
+```sql
+WHERE assigned_to = Rahul's user id
+```
+
+So even if another counsellor has leads, Rahul cannot see them.
+
+If counsellor creates a new lead, frontend does not send `assignedTo`. Backend automatically sets:
+
+```text
+assigned_to = logged in counsellor id
+```
+
+Counsellor can update own lead status, priority, reachout and assessment. But before update, backend checks that the lead is actually assigned to that counsellor.
+
+If counsellor tries to update other counsellor lead by changing API request manually, backend returns forbidden.
+
+## Why There Are Admin And Counsellor APIs Separately
+
+I kept APIs separate because permissions are different.
+
+Admin APIs:
+
+```text
+/api/admin/leads
+/api/admin/admissions
+/api/admin/counsellors
+```
+
+Counsellor APIs:
+
+```text
+/api/counsellor/leads
+/api/counsellor/admissions
+```
+
+This makes the code easy to understand. Admin routes always require admin role. Counsellor routes always require counsellor role and also check ownership of leads.
+
+## Frontend To Backend Flow
+
+The route files in `app/` are kept small. Main UI is inside `features/`.
+
+Example:
+
+```text
+app/dashboard/page.tsx
+  -> features/dashboard/DashboardPage.tsx
+```
+
+Dashboard component first gets logged in user, then decides API path.
+
+```ts
+const scope = user.role === "ADMIN" ? "admin" : "counsellor";
+```
+
+Then it calls:
+
+```text
+/api/admin/leads
+```
+
+or:
+
+```text
+/api/counsellor/leads
+```
+
+So frontend is not having two dashboards. Same dashboard changes itself based on role.
+
+## Backend To DB Flow
+
+Backend route handlers use `pg` driver. Connection is created in:
 
 ```text
 lib/db.ts
 ```
 
-Creates PostgreSQL connection pool using `pg`.
+All SQL queries use parameterized query style, for example:
+
+```ts
+db.query("SELECT * FROM leads WHERE assigned_to = $1", [user.id])
+```
+
+This avoids direct string injection in SQL.
+
+## Database Tables
+
+There are mainly three tables.
+
+### users
+
+Admin and counsellor both are stored here.
+
+Important columns:
 
 ```text
-lib/auth.ts
+id
+name
+email
+password
+role
+phone
+is_active
+created_at
 ```
 
-JWT signing, verification and cookie config.
+The `password` column stores bcrypt hash, not plain password.
+
+### leads
+
+All enquiries are stored here.
+
+Important columns:
 
 ```text
-lib/server-auth.ts
+id
+name
+phone
+email
+course_interest
+query
+source
+status
+priority
+reachout
+assessment
+assigned_to
+created_by
+created_at
+updated_at
 ```
 
-Backend helper for checking logged-in user and allowed roles.
+### admissions
+
+When a lead is converted, admission record is created here.
+
+Important columns:
 
 ```text
-lib/password.ts
+id
+lead_id
+course
+admitted_by
+admission_date
 ```
 
-bcrypt hash and verify helpers. Current hash round is 12.
+Full schema is in:
 
 ```text
-lib/lead-validation.ts
+db/schema.sql
 ```
 
-Validation helpers for lead source, status, priority and assessment.
+## Some Real Examples
 
-## Environment Variables
+### Example 1: Website Enquiry
 
-Create `.env` file:
+Student fills contact form for B.Tech CSE. Lead is created as `NEW`, `NORMAL`, and unassigned. Admin later assigns it to counsellor.
 
-```env
-DATABASE_URL="your_neon_postgres_url"
-JWT_SECRET="your_secret_key"
+### Example 2: Counsellor Follow Up
+
+Counsellor calls the student and marks reachout as yes. If student is interested, counsellor can set status as `INTERESTED` and assessment as `PASS`.
+
+### Example 3: Admission
+
+If assessment is `PASS`, admission can be done. Backend creates admission record and marks lead as `ADMITTED`.
+
+### Example 4: Counsellor Security
+
+If counsellor Rahul is assigned lead id 5, he can update it. If he tries lead id 8 which belongs to someone else, backend blocks it.
+
+## Main Folders
+
+```text
+app/          page routes and API routes
+features/     actual frontend feature code
+components/   shared UI components
+types/        TypeScript types
+lib/          db, auth, password, validation helpers
+db/           SQL schema
+scripts/      admin creation script
 ```
-
-`POSTGRES_URL` can also be used instead of `DATABASE_URL`.
 
 ## Setup
 
@@ -325,19 +355,26 @@ Install dependencies:
 npm install
 ```
 
-Run the DB schema in Neon or any PostgreSQL client:
+Add environment variables:
+
+```env
+DATABASE_URL="your_postgres_or_neon_url"
+JWT_SECRET="your_secret"
+```
+
+Run schema from:
 
 ```text
 db/schema.sql
 ```
 
-Create the first admin:
+Create first admin:
 
 ```bash
 npm run create-admin -- "Admin" admin@gmail.com 123456
 ```
 
-Run local server:
+Start project:
 
 ```bash
 npm run dev
@@ -349,7 +386,7 @@ Open:
 http://localhost:3000
 ```
 
-## Useful Commands
+## Commands
 
 ```bash
 npm run dev
@@ -358,11 +395,6 @@ npm run build
 npm run create-admin -- "Admin" admin@gmail.com 123456
 ```
 
-## Notes
+## Final Note
 
-- Passwords are hashed using bcrypt with 12 rounds.
-- JWT is stored in HTTP-only cookie.
-- Backend authorization is mandatory for every protected API.
-- Public users can only create website enquiries.
-- Admin can see all leads.
-- Counsellor can only see and update assigned leads.
+The main idea of this project is simple. Public user creates enquiry. Admin manages all leads and counsellors. Counsellor handles only assigned leads. Admission is allowed only after passed assessment. Frontend makes the UI clean, but backend is the final authority for role and data access.
