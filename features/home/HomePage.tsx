@@ -3,6 +3,7 @@ import { ArrowRight, LogIn, MessageSquareText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function HomePage() {
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4">
       <section className="mx-auto flex w-full max-w-3xl flex-col items-center gap-8 text-center">
@@ -13,7 +14,7 @@ export default function HomePage() {
 
         <div className="space-y-4">
           <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-6xl">
-            Admission Lead Management
+            Admission Management
           </h1>
           <p className="mx-auto max-w-2xl text-lg leading-8 text-muted-foreground">
             Manage enquiries, counselling and admissions efficiently.
@@ -39,3 +40,6 @@ export default function HomePage() {
     </main>
   );
 }
+
+
+
